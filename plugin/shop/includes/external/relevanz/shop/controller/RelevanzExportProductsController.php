@@ -30,7 +30,7 @@ class RelevanzExportProductsController
              WHERE configuration_key = \'DEFAULT_LANGUAGE\'
         ');
         if (xtc_db_num_rows($result, true) === 0) {
-            return '';
+            return isset($_GET['lang']) ? $_GET['lang'] : 'de';
         }
         $row = xtc_db_fetch_array($result, true);
         return $row['configuration_value'];
