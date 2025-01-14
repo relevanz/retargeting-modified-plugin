@@ -80,7 +80,7 @@ class RelevanzExportProductsController
     public function actionDefault() {
         $lang = $this->getMainLang();
         if (empty($lang)) {
-            throw new RelevanzException('Unable to get default language.', 1554160909);
+            $lang = isset($_GET['lang']) ? $_GET['lang'] : 'de';
         }
 
         $query = $this->getProductQuery($lang);
