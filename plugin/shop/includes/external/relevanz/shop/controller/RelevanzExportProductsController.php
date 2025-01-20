@@ -83,6 +83,10 @@ class RelevanzExportProductsController
             $lang = isset($_GET['lang']) ? $_GET['lang'] : 'de';
         }
 
+        $cache = true;
+        if(isset($_GET['cache']) && $_GET['cache'] == 'false') {
+            $cache = false;
+        }
         $query = $this->getProductQuery($lang);
 
         if (isset($_GET['page']) && (($page = (int)$_GET['page']) > 0)) {
@@ -90,7 +94,8 @@ class RelevanzExportProductsController
         }
 
         $productResult = xtc_db_query($query);
-        if (xtc_db_num_rows($productResult, true) === 0) {
+
+        if (xtc_db_num_rows($productResult, false) === 0) {
             return new HttpResponse('No products found.', [
                 'HTTP/1.0 404 Not Found'
             ]);
@@ -113,7 +118,7 @@ class RelevanzExportProductsController
             }
         }
 
-        while ($product = xtc_db_fetch_array($productResult, true)) {
+        while ($product = xtc_db_fetch_array($productResult, $cache)) {
             $price = round($product['price'] + $product['price'] / 100 * $product['taxRate'], 2);
             $priceOffer = ($product['specials_price'] === null)
                 ? $price
@@ -127,6 +132,8 @@ class RelevanzExportProductsController
                 preg_replace('/\[TAB:([^\]]*)\]/', '<h1>${1}</h1>', $product['longDescription']),
                 $price,
                 $priceOffer,
+                $product['price'],
+                $product['taxRate'],
                 HTTP_SERVER . DIR_WS_CATALOG . 'product_info.php?info=p' . xtc_get_prid($product['id']),
                 $this->productImageUrl($product['image'])
             ));
