@@ -5,6 +5,7 @@ Released under the MIT License (Expat)
 [https://opensource.org/licenses/MIT]
 --------------------------------------------------------------
 */
+
 use Releva\Retargeting\Base\Exception\RelevanzException;
 use Releva\Retargeting\Base\Export\Item\ProductExportItem;
 use Releva\Retargeting\Base\Export\ProductCsvExporter;
@@ -24,9 +25,10 @@ class RelevanzExportProductsController
 {
     const ITEMS_PER_PAGE = 2500;
 
-    protected function getMainLang() {
+    protected function getMainLang()
+    {
         $result = xtc_db_query('
-            SELECT configuration_value FROM `'.TABLE_CONFIGURATION.'`
+            SELECT configuration_value FROM `' . TABLE_CONFIGURATION . '`
              WHERE configuration_key = \'DEFAULT_LANGUAGE\'
         ');
         if (xtc_db_num_rows($result, true) === 0) {
@@ -36,7 +38,8 @@ class RelevanzExportProductsController
         return $row['configuration_value'];
     }
 
-    protected function getProductQuery($lang) {
+    protected function getProductQuery($lang)
+    {
         return '
             SELECT SQL_CALC_FOUND_ROWS
                    pr.products_id as `id`, pd.products_name as `name`,
@@ -44,23 +47,44 @@ class RelevanzExportProductsController
                    pd.products_description as `longDescription`,
                    pr.products_price as `price`, sp.specials_new_products_price as specials_price,
                    tr.tax_rate as taxRate,
-                   pr.products_image as `image`
-              FROM '.TABLE_PRODUCTS.' pr
-         LEFT JOIN '.TABLE_PRODUCTS_DESCRIPTION.' pd ON pr.products_id = pd.products_id
-         LEFT JOIN '.TABLE_TAX_RATES.' tr ON pr.products_tax_class_id = tr.tax_class_id
-         LEFT JOIN '.TABLE_LANGUAGES.' ln ON pd.language_id = ln.languages_id
-         LEFT JOIN '.TABLE_SPECIALS.' sp ON pr.products_id = sp.products_id AND sp.status = "1"
-             WHERE ln.code = "'.$lang.'" AND products_status = "1"
+                   pr.products_image as `image`,
+                   pr.products_tax_class_id
+              FROM ' . TABLE_PRODUCTS . ' pr
+         LEFT JOIN ' . TABLE_PRODUCTS_DESCRIPTION . ' pd ON pr.products_id = pd.products_id
+         LEFT JOIN ' . TABLE_TAX_RATES . ' tr ON pr.products_tax_class_id = tr.tax_class_id
+         LEFT JOIN ' . TABLE_LANGUAGES . ' ln ON pd.language_id = ln.languages_id
+         LEFT JOIN ' . TABLE_SPECIALS . ' sp ON pr.products_id = sp.products_id AND sp.status = "1"
+             WHERE ln.code = "' . $lang . '" AND products_status = "1"
           GROUP BY pr.products_id
         ';
     }
 
-    protected function getCategoryIdsByProductId($pid) {
+    protected function getCountryTaxRates($country_code)
+    {
+        $query = '
+        SELECT * FROM tax_rates AS t
+        LEFT JOIN zones_to_geo_zones AS z ON z.geo_zone_id = t.tax_zone_id
+        LEFT JOIN countries AS c ON c.countries_id = z.zone_country_id 
+        WHERE
+            countries_iso_code_2 = "' . $country_code . '"
+        ';
+
+        $result = xtc_db_query($query);
+        $taxRates = [];
+        while ($country = xtc_db_fetch_array($result, false)) {
+            $taxRates[$country['tax_class_id']] = $country['tax_rate'];
+        }
+
+        return $taxRates;
+    }
+
+    protected function getCategoryIdsByProductId($pid)
+    {
         $ids = [];
 
         $result = xtc_db_query('
-            SELECT categories_id FROM `'.TABLE_PRODUCTS_TO_CATEGORIES.'`
-             WHERE products_id = '.$pid.'
+            SELECT categories_id FROM `' . TABLE_PRODUCTS_TO_CATEGORIES . '`
+             WHERE products_id = ' . $pid . '
         ');
         while ($row = xtc_db_fetch_array($result, true)) {
             $ids[] = $row['categories_id'];
@@ -68,7 +92,8 @@ class RelevanzExportProductsController
         return $ids;
     }
 
-    protected function productImageUrl($image) {
+    protected function productImageUrl($image)
+    {
         $imageUrl = HTTP_SERVER . DIR_WS_CATALOG . DIR_WS_INFO_IMAGES . $image;
 
         if (file_exists(DIR_WS_ORIGINAL_IMAGES . $image)) {
@@ -77,20 +102,26 @@ class RelevanzExportProductsController
         return $imageUrl;
     }
 
-    public function actionDefault() {
+    public function actionDefault()
+    {
         $lang = $this->getMainLang();
         if (empty($lang)) {
             $lang = isset($_GET['lang']) ? $_GET['lang'] : 'de';
         }
 
         $cache = true;
-        if(isset($_GET['cache']) && $_GET['cache'] == 'false') {
+        if (isset($_GET['cache']) && $_GET['cache'] == 'false') {
             $cache = false;
         }
         $query = $this->getProductQuery($lang);
 
+        $taxRates = [];
+        if (isset($_GET['country_code']) && !empty($_GET['country_code'])) {
+            $taxRates = $this->getCountryTaxRates($_GET['country_code']);
+        }
+
         if (isset($_GET['page']) && (($page = (int)$_GET['page']) > 0)) {
-            $query .= 'LIMIT '.(($page - 1) * self::ITEMS_PER_PAGE).', '.self::ITEMS_PER_PAGE;
+            $query .= 'LIMIT ' . (($page - 1) * self::ITEMS_PER_PAGE) . ', ' . self::ITEMS_PER_PAGE;
         }
 
         $productResult = xtc_db_query($query);
@@ -109,16 +140,21 @@ class RelevanzExportProductsController
         $exporter = null;
         switch ($format) {
             case 'json': {
-                $exporter = new ProductJsonExporter();
-                break;
-            }
+                    $exporter = new ProductJsonExporter();
+                    break;
+                }
             default: {
-                $exporter = new ProductCsvExporter();
-                break;
-            }
+                    $exporter = new ProductCsvExporter();
+                    break;
+                }
         }
-
+        $i = 0;
         while ($product = xtc_db_fetch_array($productResult, $cache)) {
+            // if we got a specific country tax rate, lets get it
+            if (isset($taxRates[$product['products_tax_class_id']])) {
+                $product['taxRate'] = $taxRates[$product['products_tax_class_id']];
+            }
+
             $price = round($product['price'] + $product['price'] / 100 * $product['taxRate'], 2);
             $priceOffer = ($product['specials_price'] === null)
                 ? $price
@@ -137,21 +173,21 @@ class RelevanzExportProductsController
                 HTTP_SERVER . DIR_WS_CATALOG . 'product_info.php?info=p' . xtc_get_prid($product['id']),
                 $this->productImageUrl($product['image'])
             ));
-
         }
 
         $headers = [];
         foreach ($exporter->getHttpHeaders() as $hkey => $hval) {
-            $headers[] = $hkey.': '.$hval;
+            $headers[] = $hkey . ': ' . $hval;
         }
         $headers[] = 'Cache-Control: must-revalidate';
-        $headers[] = 'X-Relevanz-Product-Count: '.$pCount;
+        $headers[] = 'X-Relevanz-Product-Count: ' . $pCount;
         #$headers[] = 'Content-Type: text/plain; charset="utf-8"'; $headers[] = 'Content-Disposition: inline';
 
         return new HttpResponse($exporter->getContents(), $headers);
     }
 
-    public static function discover() {
+    public static function discover()
+    {
         return [
             'url' => ShopInfo::getUrlProductExport(),
             'parameters' => [
@@ -164,7 +200,7 @@ class RelevanzExportProductsController
                     'type' => 'integer',
                     'optional' => true,
                     'info' => [
-                         'items-per-page' => self::ITEMS_PER_PAGE,
+                        'items-per-page' => self::ITEMS_PER_PAGE,
                     ],
                 ],
             ]
