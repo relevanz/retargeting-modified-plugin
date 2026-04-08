@@ -38,43 +38,81 @@ class RelevanzExportProductsController
         return $row['configuration_value'];
     }
 
-    protected function getProductQuery($lang)
-    {
+    protected function getProductQuery($lang) {
         return '
             SELECT SQL_CALC_FOUND_ROWS
                    pr.products_id as `id`, pd.products_name as `name`,
                    pd.products_short_description as `shortDescription`,
                    pd.products_description as `longDescription`,
                    pr.products_price as `price`, sp.specials_new_products_price as specials_price,
-                   tr.tax_rate as taxRate,
                    pr.products_image as `image`,
                    pr.products_tax_class_id
-              FROM ' . TABLE_PRODUCTS . ' pr
-         LEFT JOIN ' . TABLE_PRODUCTS_DESCRIPTION . ' pd ON pr.products_id = pd.products_id
-         LEFT JOIN ' . TABLE_TAX_RATES . ' tr ON pr.products_tax_class_id = tr.tax_class_id
-         LEFT JOIN ' . TABLE_LANGUAGES . ' ln ON pd.language_id = ln.languages_id
-         LEFT JOIN ' . TABLE_SPECIALS . ' sp ON pr.products_id = sp.products_id AND sp.status = "1"
-             WHERE ln.code = "' . $lang . '" AND products_status = "1"
+              FROM '.TABLE_PRODUCTS.' pr
+         LEFT JOIN '.TABLE_PRODUCTS_DESCRIPTION.' pd ON pr.products_id = pd.products_id
+         LEFT JOIN '.TABLE_LANGUAGES.' ln ON pd.language_id = ln.languages_id
+         LEFT JOIN '.TABLE_SPECIALS.' sp ON pr.products_id = sp.products_id AND sp.status = "1"
+             WHERE ln.code = "'.$lang.'" AND products_status = "1"
           GROUP BY pr.products_id
         ';
     }
 
-    protected function getCountryTaxRates($country_code)
-    {
-        $query = '
-        SELECT * FROM tax_rates AS t
-        LEFT JOIN zones_to_geo_zones AS z ON z.geo_zone_id = t.tax_zone_id
-        LEFT JOIN countries AS c ON c.countries_id = z.zone_country_id 
-        WHERE
-            countries_iso_code_2 = "' . $country_code . '"
-        ';
+    /**
+     * Returns tax rates keyed by tax_class_id for the shop's configured home country.
+     * Falls back to the highest rate per class across all zones if the country lookup fails.
+     */
+    protected function getDefaultTaxRates() {
+        $cfgResult = xtc_db_query('
+            SELECT configuration_value FROM `'.TABLE_CONFIGURATION.'`
+             WHERE configuration_key = \'STORE_COUNTRY\'
+        ');
+        if (xtc_db_num_rows($cfgResult, true) > 0) {
+            $cfg = xtc_db_fetch_array($cfgResult, true);
+            $storeCountryId = (int)$cfg['configuration_value'];
 
-        $result = xtc_db_query($query);
-        $taxRates = [];
-        while ($country = xtc_db_fetch_array($result, false)) {
-            $taxRates[$country['tax_class_id']] = $country['tax_rate'];
+            // Join through zones_to_geo_zones without restricting zone_id
+            // so the query works regardless of whether zone_id = 0 (all zones)
+            // or a specific zone ID is stored for this country.
+            $result = xtc_db_query('
+                SELECT t.tax_class_id, t.tax_rate
+                  FROM `'.TABLE_TAX_RATES.'` t
+                  JOIN zones_to_geo_zones z ON z.geo_zone_id = t.tax_zone_id
+                 WHERE z.zone_country_id = ' . $storeCountryId . '
+                 GROUP BY t.tax_class_id
+            ');
+            $taxRates = [];
+            while ($row = xtc_db_fetch_array($result, false)) {
+                $taxRates[$row['tax_class_id']] = $row['tax_rate'];
+            }
+            if (!empty($taxRates)) {
+                return $taxRates;
+            }
         }
 
+        // Fallback: return the highest rate per tax class across all zones
+        $result = xtc_db_query('
+            SELECT tax_class_id, MAX(tax_rate) as tax_rate
+              FROM `'.TABLE_TAX_RATES.'`
+             GROUP BY tax_class_id
+        ');
+        $taxRates = [];
+        while ($row = xtc_db_fetch_array($result, false)) {
+            $taxRates[$row['tax_class_id']] = $row['tax_rate'];
+        }
+        return $taxRates;
+    }
+
+    protected function getCountryTaxRates($country_code) {
+        $result = xtc_db_query('
+            SELECT t.tax_class_id, t.tax_rate
+              FROM `'.TABLE_TAX_RATES.'` AS t
+              JOIN zones_to_geo_zones AS z ON z.geo_zone_id = t.tax_zone_id
+              JOIN countries AS c ON c.countries_id = z.zone_country_id
+             WHERE c.countries_iso_code_2 = "' . $country_code . '"
+        ');
+        $taxRates = [];
+        while ($row = xtc_db_fetch_array($result, false)) {
+            $taxRates[$row['tax_class_id']] = $row['tax_rate'];
+        }
         return $taxRates;
     }
 
@@ -109,19 +147,16 @@ class RelevanzExportProductsController
             $lang = isset($_GET['lang']) ? $_GET['lang'] : 'de';
         }
 
-        $cache = true;
-        if (isset($_GET['cache']) && $_GET['cache'] == 'false') {
-            $cache = false;
-        }
         $query = $this->getProductQuery($lang);
 
-        $taxRates = [];
         if (isset($_GET['country_code']) && !empty($_GET['country_code'])) {
             $taxRates = $this->getCountryTaxRates($_GET['country_code']);
+        } else {
+            $taxRates = $this->getDefaultTaxRates();
         }
 
         if (isset($_GET['page']) && (($page = (int)$_GET['page']) > 0)) {
-            $query .= 'LIMIT ' . (($page - 1) * self::ITEMS_PER_PAGE) . ', ' . self::ITEMS_PER_PAGE;
+            $query .= 'LIMIT '.(($page - 1) * self::ITEMS_PER_PAGE).', '.self::ITEMS_PER_PAGE;
         }
 
         $productResult = xtc_db_query($query);
@@ -137,23 +172,19 @@ class RelevanzExportProductsController
         $pCount = isset($r['total']) ? $r['total'] : -1;
 
         $format = isset($_GET['format']) ? $_GET['format'] : '';
-        $exporter = null;
         switch ($format) {
-            case 'json': {
-                    $exporter = new ProductJsonExporter();
-                    break;
-                }
-            default: {
-                    $exporter = new ProductCsvExporter();
-                    break;
-                }
+            case 'json':
+                $exporter = new ProductJsonExporter();
+                break;
+            default:
+                $exporter = new ProductCsvExporter();
+                break;
         }
-        $i = 0;
-        while ($product = xtc_db_fetch_array($productResult, $cache)) {
-            // if we got a specific country tax rate, lets get it
-            if (isset($taxRates[$product['products_tax_class_id']])) {
-                $product['taxRate'] = $taxRates[$product['products_tax_class_id']];
-            }
+
+        while ($product = xtc_db_fetch_array($productResult, false)) {
+            $product['taxRate'] = isset($taxRates[$product['products_tax_class_id']])
+                ? $taxRates[$product['products_tax_class_id']]
+                : 0;
 
             $price = round($product['price'] + $product['price'] / 100 * $product['taxRate'], 2);
             $priceOffer = ($product['specials_price'] === null)

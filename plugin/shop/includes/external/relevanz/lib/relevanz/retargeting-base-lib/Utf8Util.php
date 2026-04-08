@@ -87,6 +87,13 @@ class Utf8Util {
         if (!is_string($str)) {
             return $str;
         }
+        // If the string is already valid UTF-8, return it immediately.
+        // mb_detect_encoding with ISO-8859-1 first in the order would otherwise
+        // misidentify valid UTF-8 bytes (e.g. German umlauts) as ISO-8859-1
+        // and double-encode them.
+        if (function_exists('mb_check_encoding') && mb_check_encoding($str, 'UTF-8')) {
+            return $str;
+        }
         // Check dependencies
         if (!function_exists('mb_detect_encoding') || !function_exists('iconv')) {
             // Fall back to a flawed but in most cases working native implementation.
