@@ -5,6 +5,7 @@ Released under the MIT License (Expat)
 [https://opensource.org/licenses/MIT]
 --------------------------------------------------------------
 */
+
 if (!isset($current_page)) {
     global $current_page;
 }
@@ -15,7 +16,7 @@ if (!isset($messageStack)) {
 
 global $admin_access;
 
-require (DIR_WS_INCLUDES.'head.php');
+require_once (DIR_WS_INCLUDES.'head.php');
 ?>
     <link rel="stylesheet" type="text/css" href="<?php echo DIR_WS_MOD_RELEVANZ.'admin/assets/relevanz.css'; ?>">
     <link rel="stylesheet" type="text/css" href="<?php echo DIR_WS_MOD_RELEVANZ.'admin/assets/'.$view.'.css'; ?>">

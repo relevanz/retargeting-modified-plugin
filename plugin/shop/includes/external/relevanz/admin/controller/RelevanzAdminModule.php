@@ -38,13 +38,12 @@ class RelevanzAdminModule {
     }
 
     protected function outputPage($view, $data) {
-        $data = array_merge_recursive([
+        global $relevanz_view, $relevanz_data;
+        $relevanz_data = array_merge_recursive([
             'credentials' => $this->credentials,
             'messages' => [],
         ], $data);
-        require(__DIR__.'/../views/admin-top.php');
-        require(__DIR__.'/../views/'.$view.'.php');
-        require(__DIR__.'/../views/admin-bottom.php');
+        $relevanz_view = $view;
     }
 
     protected function actionConf() {
