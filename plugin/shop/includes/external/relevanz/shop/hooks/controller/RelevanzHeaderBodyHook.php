@@ -6,6 +6,7 @@ Released under the MIT License (Expat)
 --------------------------------------------------------------
 */
 use Releva\Retargeting\Base\RelevanzApi;
+use Releva\Retargeting\Modified\Configuration as ShopConfiguration;
 
 class RelevanzHeaderBodyHook extends RelevanzHookAbstract {
 
@@ -80,8 +81,8 @@ class RelevanzHeaderBodyHook extends RelevanzHookAbstract {
                 $row = xtc_db_fetch_array($q);
                 if (isset($row['value'])) {
                     $orderTotal = (float)$row['value'];
-                    // reduce by tax
-                    $q = xtc_db_query('SELECT `value` FROM `'.TABLE_ORDERS_TOTAL.'` WHERE `orders_id` = '.$modeid.' AND `class`=\'ot_tax\' LIMIT 1');
+                    // reduce by tax (sum all tax rows to handle mixed tax rates, e.g. 7% + 19%)
+                    $q = xtc_db_query('SELECT SUM(`value`) as `value` FROM `'.TABLE_ORDERS_TOTAL.'` WHERE `orders_id` = '.$modeid.' AND `class`=\'ot_tax\'');
                     $row = xtc_db_fetch_array($q);
                     if (isset($row['value'])) {
                         $orderTotal -= (float)$row['value'];
@@ -95,7 +96,7 @@ class RelevanzHeaderBodyHook extends RelevanzHookAbstract {
                 }
                 // If ot_total does not exist, assume it is the highest value in the orders_total table for this order.
                 if ($orderTotal === null) {
-                    $q = xtc_db_query('SELECT max(`value`) as `value` FROM `` WHERE `orders_id` = '.$modeid.'');
+                    $q = xtc_db_query('SELECT max(`value`) as `value` FROM `'.TABLE_ORDERS_TOTAL.'` WHERE `orders_id` = '.$modeid.'');
                     $row = xtc_db_fetch_array($q);
                     if (isset($row['value'])) {
                         $orderTotal = (float)$row['value'];
@@ -126,10 +127,15 @@ class RelevanzHeaderBodyHook extends RelevanzHookAbstract {
             return;
         }
 
-        $trackerCode = '
-            <!-- Start of releva.nz tracking code -->
-            <script type="text/javascript" src="' . htmlspecialchars($trackerUrl) . '" async="true"></script>
-            <!-- End of releva.nz tracking code -->'."\n";
+        $additionalHtml = ShopConfiguration::getAdditionalHtml();
+        $forcePixelScript = ($additionalHtml !== null)
+            ? $additionalHtml . "\n"
+            : '<script>relevanzRetargetingForcePixel = true;</script>' . "\n";
+
+        $trackerCode = $forcePixelScript
+            . '            <!-- Start of releva.nz tracking code -->' . "\n"
+            . '            <script type="text/javascript" src="' . htmlspecialchars($trackerUrl) . '" async="true"></script>' . "\n"
+            . '            <!-- End of releva.nz tracking code -->' . "\n";
 
         echo $trackerCode;
     }

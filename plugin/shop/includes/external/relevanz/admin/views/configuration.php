@@ -45,6 +45,15 @@ if ($data['credentials']->isComplete()) {
         <td class="input">
             <input type="text" value="'.$data['urlExport'].'" readonly="">
         </td>
+    </tr>
+    <tr>
+        <td class="label"><label for="conf_additional_html">'.RELEVANZ_LABEL_ADDITIONAL_HTML.'</label></td>
+        <td class="info has-tooltip">
+            <span class="tooltip">'.RELEVANZ_LABEL_ADDITIONAL_HTML_TOOLTIP.'</span>
+        </td>
+        <td class="input">
+            <textarea id="conf_additional_html" name="conf[additional_html]" rows="6" style="width:100%;font-family:monospace;font-size:12px;">'.htmlspecialchars((string)$data['additionalHtml']).'</textarea>
+        </td>
     </tr>';
 }
 

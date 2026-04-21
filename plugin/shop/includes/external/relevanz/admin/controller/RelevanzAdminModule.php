@@ -70,12 +70,17 @@ class RelevanzAdminModule {
             }
         }
 
+        if (isset($_POST['conf']['additional_html'])) {
+            ShopConfiguration::updateAdditionalHtml($_POST['conf']['additional_html']);
+        }
+
         $exportUrl = str_replace(':auth', $this->credentials->getAuthHash(), ShopInfo::getUrlProductExport());
 
         $this->outputPage('configuration', [
             'messages' => $messages,
             'action' => xtc_href_link('relevanz.php', 'tab=conf'),
             'urlExport' => $exportUrl,
+            'additionalHtml' => ShopConfiguration::getAdditionalHtml(),
         ]);
     }
 

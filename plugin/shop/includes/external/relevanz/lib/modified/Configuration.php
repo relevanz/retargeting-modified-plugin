@@ -14,10 +14,11 @@ use Releva\Retargeting\Base\Credentials;
 
 class Configuration implements ConfigurationInterface
 {
-    const PLUGIN_VERSION = '1.0.2';
+    const PLUGIN_VERSION = '1.0.3';
     const CONF_PREFIX = 'configuration/';
     const CONF_APIKEY = 'RELEVANZ_APIKEY';
     const CONF_USERID = 'RELEVANZ_USERID';
+    const CONF_ADDITIONAL_HTML = 'RELEVANZ_ADDITIONAL_HTML';
 
     protected static function read($key) {
         $query = xtc_db_query('
@@ -69,6 +70,14 @@ class Configuration implements ConfigurationInterface
     public static function updateCredentials(Credentials $credentials) {
         self::write(self::CONF_APIKEY, $credentials->getApiKey());
         self::write(self::CONF_USERID, $credentials->getUserId());
+    }
+
+    public static function getAdditionalHtml() {
+        return self::read(self::CONF_ADDITIONAL_HTML);
+    }
+
+    public static function updateAdditionalHtml($html) {
+        self::write(self::CONF_ADDITIONAL_HTML, $html);
     }
 
     public static function getPluginVersion() {

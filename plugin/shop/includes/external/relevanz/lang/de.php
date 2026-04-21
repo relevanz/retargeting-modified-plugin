@@ -25,6 +25,9 @@ define('RELEVANZ_LABEL_CUSTOMERID', 'Ihre Kunden ID');
 define('RELEVANZ_LABEL_EXPORTURL', 'Export-URL');
 define('RELEVANZ_LABEL_EXPORTURL_TOOLTIP', 'Bitte übermitteln Sie diese URL an den releva.nz Kundenservice.');
 
+define('RELEVANZ_LABEL_ADDITIONAL_HTML', 'Zusätzliches HTML');
+define('RELEVANZ_LABEL_ADDITIONAL_HTML_TOOLTIP', 'Optional: HTML für die Integration eines Consent Managers (z.B. Usercentrics, consentmanager). Wenn leer, wird das Tracking-Pixel immer geladen.');
+
 define('RELEVANZ_MSG_1554076968', 'Einstellungen gespeichert.');
 define('RELEVANZ_MSG_1553935480', 'Es kann keine Verbindung zum API-Server hergestellt werden. Bitte versuchen Sie es zu einem späteren Zeitpunkt erneut.');
 define('RELEVANZ_MSG_1553935569', 'Der API-Key kann nicht überprüft werden. Bitte stellen Sie sicher, dass der API-Key korrekt ist.');
